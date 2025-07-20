@@ -315,9 +315,9 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
         preflightCommitment: Commitment.confirmed,
       );
       //
-      print("✅ Oppi token transfer successful: $txSignature");
+      print("✅ SPL token transfer successful: $txSignature");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(" ✅ Oppi token transferred successfully : $txSignature")),
+        SnackBar(content: Text(" ✅ SPL token transferred successfully : $txSignature")),
       );
       print("txSignature $txSignature");
       await scenario.close();
@@ -362,7 +362,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
               ),
               // ElevatedButton(
               //     onPressed: sendOppiTokens,
-              //     child: Text('SEND OPPI TOKENS')
+              //     child: Text('SEND SPL TOKENS')
               // ),
               ElevatedButton(
                   onPressed: sendSplTokens,
