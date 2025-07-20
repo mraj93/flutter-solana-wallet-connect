@@ -42,8 +42,8 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     super.initState();
 
     client = SolanaClient(
-      rpcUrl: Uri.parse("https://devnet.helius-rpc.com/?api-key=0dc632a6-47ba-430d-9abb-dbbdc036cd92"),
-      websocketUrl: Uri.parse("wss://devnet.helius-rpc.com/?api-key=0dc632a6-47ba-430d-9abb-dbbdc036cd92"),
+      rpcUrl: Uri.parse("PASTE_RPC_URL"),
+      websocketUrl: Uri.parse("PASTE_WSS_URL"),
     );
 
     // super.initState();
