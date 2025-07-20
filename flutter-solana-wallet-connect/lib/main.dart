@@ -153,7 +153,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     }
   }
 
-  Future<void> sendOppiTokens() async {
+  Future<void> sendSplTokens() async {
     try {
       if (!isWalletConnected || authResult == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -360,10 +360,6 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                 onPressed: sendSolana,
                 child: Text('SEND SOL 0.01'),
               ),
-              // ElevatedButton(
-              //     onPressed: sendOppiTokens,
-              //     child: Text('SEND SPL TOKENS')
-              // ),
               ElevatedButton(
                   onPressed: sendSplTokens,
                   child: Text('SEND SPL TOKENS')
