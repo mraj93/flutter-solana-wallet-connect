@@ -46,18 +46,29 @@
         <key>UIApplicationSupportsIndirectInputEvents</key>
         <true />
 
-        <!-- ✅ Phantom Deep Link Support -->
+        <!--Phantom Deep Link Support -->
         <key>CFBundleURLTypes</key>
         <array>
             <dict>
                 <key>CFBundleURLName</key>
-                <string>phantom-deeplink</string>
+                <string>wallet.deeplink</string>
                 <key>CFBundleURLSchemes</key>
                 <array>
-                    <string>test5wallet</string> <!-- Replace with your scheme -->
+                    <string>test5wallet</string>
                 </array>
             </dict>
         </array>
+
+        <!-- Add wallet schemes for detection -->
+        <key>LSApplicationQueriesSchemes</key>
+        <array>
+            <string>phantom</string>
+            <string>solflare</string>
+        </array>
+
+        <!-- Enable Flutter deep linking -->
+        <key>FlutterDeepLinkingEnabled</key>
+        <true/>
         <key>NSAppTransportSecurity</key>
         <dict>
             <key>NSAllowsArbitraryLoads</key>
