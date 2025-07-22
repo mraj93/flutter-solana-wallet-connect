@@ -1,10 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:solana/base58.dart';
 import 'package:solana_mobile_client/solana_mobile_client.dart';
 import 'package:solana/solana.dart';
 import 'package:solana/encoder.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
@@ -26,6 +30,8 @@ class MyApp extends StatelessWidget {
 }
 
 class ConnectWalletScreen extends StatefulWidget {
+  const ConnectWalletScreen({super.key});
+
   @override
   State<ConnectWalletScreen> createState() => _ConnectWalletScreenState();
 }
@@ -42,8 +48,8 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     super.initState();
 
     client = SolanaClient(
-      rpcUrl: Uri.parse("PASTE_RPC_URL"),
-      websocketUrl: Uri.parse("PASTE_WSS_URL"),
+      rpcUrl: Uri.parse("https://devnet.helius-rpc.com/?api-key=0dc632a6-47ba-430d-9abb-dbbdc036cd92"),
+      websocketUrl: Uri.parse("wss://devnet.helius-rpc.com/?api-key=0dc632a6-47ba-430d-9abb-dbbdc036cd92"),
     );
 
     // super.initState();
@@ -55,38 +61,79 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
 
   bool isWalletConnected = false;
 
+  // void connectWallet() async {
+  //   scenario = await LocalAssociationScenario.create();
+  //   scenario.startActivityForResult(null).ignore();
+  //   final mwaClient = await scenario.start();
+  //   authResult = await mwaClient.authorize(
+  //     identityName: 'Test App',
+  //     identityUri: Uri.parse("https://placeholder.com"),
+  //     iconUri: Uri.parse("favicon"),
+  //     cluster: 'devnet',
+  //   );
+  //   if (authResult?.publicKey != null) {
+  //     setState(() => isWalletConnected = true);
+  //   }
+  //   print("Wallet Connected: ${authResult?.accountLabel}");
+  //   print("Wallet Address: ${base58encode(authResult?.publicKey.toList() ?? [])}");
+  //   scenario.close();
+  // }
+
+
   void connectWallet() async {
-    scenario = await LocalAssociationScenario.create();
-    scenario.startActivityForResult(null).ignore();
-    final mwaClient = await scenario.start();
-    authResult = await mwaClient.authorize(
-      identityName: 'Test App',
-      identityUri: Uri.parse("https://placeholder.com"),
-      iconUri: Uri.parse("favicon"),
-      cluster: 'devnet',
-    );
-    if (authResult?.publicKey != null) {
-      setState(() => isWalletConnected = true);
+    if (Platform.isAndroid) {
+      // Android flow
+      scenario = await LocalAssociationScenario.create();
+      scenario.startActivityForResult(null).ignore();
+      final mwaClient = await scenario.start();
+      authResult = await mwaClient.authorize(
+        identityName: 'Test App',
+        identityUri: Uri.parse("https://placeholder.com"),
+        iconUri: Uri.parse("favicon"),
+        cluster: 'devnet',
+      );
+      if (authResult?.publicKey != null) {
+        setState(() => isWalletConnected = true);
+      }
+      print("Wallet Connected: ${authResult?.accountLabel}");
+      print("Wallet Address: ${base58encode(authResult?.publicKey.toList() ?? [])}");
+      scenario.close();
+    } else if (Platform.isIOS) {
+      // iOS flow using Phantom
+      print(">> called");
+      PhantomConnector().connectPhantomWallet((pubkey) {
+        print(">> $pubkey");
+        setState(() {
+          if (authResult?.publicKey != null) {
+                setState(() => isWalletConnected = true);
+              }
+          isWalletConnected = true;
+          authResult = AuthorizationResult(
+            publicKey: Uint8List.fromList(base58decode(pubkey)),
+            authToken: '', // not used for Phantom
+            accountLabel: 'Phantom',
+            walletUriBase: null,
+          );
+        });
+        print("Wallet Connected (iOS): $pubkey");
+      });
     }
-    print("Wallet Connected: ${authResult?.accountLabel}");
-    print("Wallet Address: ${base58encode(authResult?.publicKey.toList() ?? [])}");
-    scenario.close();
   }
 
   Future<bool> _doReauthroize(MobileWalletAdapterClient mwaClient) async {
     try {
       final reauthorized = await mwaClient.reauthorize(
-        identityUri: Uri.parse("https://placeholder.com"),
-        iconUri: Uri.parse("favicon.ico"),
-        identityName: "Workshop",
-        authToken: authResult!.authToken
+          identityUri: Uri.parse("https://placeholder.com"),
+          iconUri: Uri.parse("favicon.ico"),
+          identityName: "Workshop",
+          authToken: authResult!.authToken
       );
       return reauthorized?.publicKey !=null;
     } catch (err) {
-        return false;
+      return false;
     }
   }
-  
+
   void disconnectWallet() {
     if (authResult != null) {
       try {
@@ -105,55 +152,66 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You are not authroized")));
         return;
       }
-      final amount = 0.01;
-      final reciever = Ed25519HDPublicKey.fromBase58("9dDzzj6ztgnmcqM25yD4odBsqq7JVvwMNStfp6rrQ9VJ");
-      scenario = await LocalAssociationScenario.create();
-      scenario.startActivityForResult(null).ignore();
-      final mwaClient = await scenario.start();
-      if (!await _doReauthroize(mwaClient)) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Reauthrozation failed")));
-        await scenario.close();
-        return;
+
+      if (Platform.isIOS) {
+        await PhantomTransfer.sendSolFromPhantom(
+          context: context,
+          fromAddress: base58encode(authResult!.publicKey.toList()),
+          toAddress: "9dDzzj6ztgnmcqM25yD4odBsqq7JVvwMNStfp6rrQ9VJ",
+          lamports: (0.01 * lamportsPerSol).toInt(),
+        );
       }
-      final signer = Ed25519HDPublicKey(authResult!.publicKey);
-      final blockhash = (await client.rpcClient.getLatestBlockhash()).value.blockhash;
-      final instruction = SystemInstruction.transfer(
+      else {
+        final amount = 0.01;
+        final reciever = Ed25519HDPublicKey.fromBase58("9dDzzj6ztgnmcqM25yD4odBsqq7JVvwMNStfp6rrQ9VJ");
+        scenario = await LocalAssociationScenario.create();
+        scenario.startActivityForResult(null).ignore();
+        final mwaClient = await scenario.start();
+        if (!await _doReauthroize(mwaClient)) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Reauthrozation failed")));
+          await scenario.close();
+          return;
+        }
+        final signer = Ed25519HDPublicKey(authResult!.publicKey);
+        final blockhash = (await client.rpcClient.getLatestBlockhash()).value.blockhash;
+        final instruction = SystemInstruction.transfer(
           fundingAccount: signer,
           recipientAccount: reciever,
           lamports: (amount * lamportsPerSol).toInt(),
-      );
-      final message = Message(
-          instructions: [instruction]
-      ).compile(recentBlockhash: blockhash, feePayer: signer);
-      final signedTx = SignedTx(
+        );
+        final message = Message(
+            instructions: [instruction]
+        ).compile(recentBlockhash: blockhash, feePayer: signer);
+        final signedTx = SignedTx(
           compiledMessage: message,
           signatures: [Signature(List.filled(64, 0), publicKey: signer)],
-      );
-      final serializeTx = Uint8List.fromList(signedTx.toByteArray().toList());
-      final signResult = await mwaClient.signTransactions(
+        );
+        final serializeTx = Uint8List.fromList(signedTx.toByteArray().toList());
+        final signResult = await mwaClient.signTransactions(
           transactions: [serializeTx],
-      );
-      if (signResult.signedPayloads.isEmpty) {
-        throw Exception("No signed payloads were returned");
+        );
+        if (signResult.signedPayloads.isEmpty) {
+          throw Exception("No signed payloads were returned");
+        }
+        final signature = await client.rpcClient.sendTransaction(
+            base64.encode(signResult.signedPayloads[0]),
+            preflightCommitment: Commitment.confirmed
+        );
+        print("transaction successfully ${signature}");
+        print("✅ SOL Transferred Successfully: $signature");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("✅ SOL Transferred Successfully $signature")),
+        );
+        await scenario.close();
       }
-      final signature = await client.rpcClient.sendTransaction(
-          base64.encode(signResult.signedPayloads[0]),
-          preflightCommitment: Commitment.confirmed
-      );
-      print("transaction successfully ${signature}");
-      print("✅ SOL Transferred Successfully: $signature");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ SOL Transferred Successfully $signature")),
-      );
-      await scenario.close();
     } catch (err) {
-      print("error while transferring the SOL");
+      print("error while transferring the SOL $err");
     }
   }
 
-  Future<void> sendSplTokens() async {
+  Future<void> sendOppiTokens() async {
     try {
       if (!isWalletConnected || authResult == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -263,8 +321,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     }
   }
 
-  Future<void> sendSplTokens (
-  ) async {
+  Future<void> sendSplTokens () async {
     try {
       scenario = await LocalAssociationScenario.create();
       scenario.startActivityForResult(null).ignore();
@@ -278,8 +335,8 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
       }
       final signer = Ed25519HDPublicKey(authResult!.publicKey);
       final blockhash = (await client.rpcClient.getLatestBlockhash()).value.blockhash;
-      final mint = Ed25519HDPublicKey.fromBase58('PASTE_SPL_TOKEN_ADDRESS');
-      final receiver = Ed25519HDPublicKey.fromBase58('PASTE_RECIPIENT_ADDRESS');
+      final mint = Ed25519HDPublicKey.fromBase58("BXxnX1n7xYV2e8VMPhaXX2mY8CoXzB5vi3JWFavbLfjA");
+      final receiver = Ed25519HDPublicKey.fromBase58("9dDzzj6ztgnmcqM25yD4odBsqq7JVvwMNStfp6rrQ9VJ");
       print(mint);
       print('blockhash ${blockhash}');
       final instructions = <Instruction>[];
@@ -295,12 +352,12 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
       );
       instructions.add(ix);
       final message = Message(instructions: instructions).compile(
-          recentBlockhash: blockhash,
-          feePayer: signer,
+        recentBlockhash: blockhash,
+        feePayer: signer,
       );
       final signedTx = SignedTx(
-      compiledMessage: message,
-      signatures: [Signature(List.filled(64, 0), publicKey: signer)],
+        compiledMessage: message,
+        signatures: [Signature(List.filled(64, 0), publicKey: signer)],
       );
       final serializedTx = Uint8List.fromList(signedTx.toByteArray().toList());
       print("signedTx $signedTx");
@@ -315,9 +372,9 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
         preflightCommitment: Commitment.confirmed,
       );
       //
-      print("✅ SPL token transfer successful: $txSignature");
+      print("✅ Oppi token transfer successful: $txSignature");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(" ✅ SPL token transferred successfully : $txSignature")),
+        SnackBar(content: Text(" ✅ Oppi token transferred successfully : $txSignature")),
       );
       print("txSignature $txSignature");
       await scenario.close();
@@ -360,6 +417,10 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                 onPressed: sendSolana,
                 child: Text('SEND SOL 0.01'),
               ),
+              // ElevatedButton(
+              //     onPressed: sendOppiTokens,
+              //     child: Text('SEND OPPI TOKENS')
+              // ),
               ElevatedButton(
                   onPressed: sendSplTokens,
                   child: Text('SEND SPL TOKENS')
@@ -369,5 +430,136 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
         ),
       ),
     );
+  }
+}
+
+class PhantomConnector {
+  final String redirectUri = 'test5wallet://phantom';// Use same in Info.plist
+  final String dappUrl = 'https://example.com';
+  final String cluster = 'devnet';
+
+  final appLink = AppLinks();
+
+  String _generateRandomKey() {
+    final rand = Random.secure();
+    final bytes = Uint8List(32)..setAll(0, List.generate(32, (_) => rand.nextInt(256)));
+    return base58encode(bytes);
+  }
+
+  Future<void> connectPhantomWallet(Function(String pubkey) onConnect) async {
+    final nonce = _generateRandomKey();
+    print(">> called 1");
+
+    final Uri phantomUri = Uri.https('phantom.app', '/ul/v1/connect', {
+      'app_url': dappUrl,
+      'redirect_link': redirectUri,
+      'cluster': cluster,
+      'dapp_encryption_public_key': nonce,
+    });
+    print(">> called 2");
+    if (await canLaunchUrl(phantomUri)) {
+      print(">> called 3");
+      await launchUrl(phantomUri, mode: LaunchMode.externalApplication);
+      print(">> called 4");
+    } else {
+      throw 'Could not launch Phantom';
+    }
+
+    appLink.uriLinkStream.listen((uri) {
+      print(">> called 6");
+      print(">> data : $uri");
+      print(">> data : ${uri.scheme}");
+      if (uri.scheme == 'test5wallet') {
+      print(">> called 7");
+      print(">> dataQ : ${uri.queryParameters}");
+        final pubkey = uri.queryParameters[Platform.isIOS ? 'phantom_encryption_public_key' : 'public_key'];
+      print(">> pubkey : $pubkey");
+        if (pubkey != null) {
+          onConnect(pubkey);
+        }
+      }
+    });
+  }
+}
+
+class PhantomTransfer {
+  static final _redirect = 'test5wallet://phantom';
+  static final _cluster = 'devnet';
+  static final _dappUrl = 'https://example.com';
+
+  static final appLink = AppLinks();
+
+  static String _generateNonce() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+    return base58encode(Uint8List.fromList(bytes));
+  }
+
+  static Future<void> sendSolFromPhantom({
+    required BuildContext context,
+    required String fromAddress,
+    required String toAddress,
+    required int lamports,
+  }) async {
+    try {
+      final recentBlockhash = await _getLatestBlockhash();
+      final instruction = SystemInstruction.transfer(
+        fundingAccount: Ed25519HDPublicKey.fromBase58(fromAddress),
+        recipientAccount: Ed25519HDPublicKey.fromBase58(toAddress),
+        lamports: lamports,
+      );
+
+      final message = Message.only(instruction);
+      final compiled = message.compile(
+        recentBlockhash: recentBlockhash,
+        feePayer: Ed25519HDPublicKey.fromBase58(fromAddress),
+      );
+
+      final serializedMessage = base64.encode(
+        Uint8List.fromList(compiled.toByteArray().toList()),
+      );
+
+
+      final nonce = _generateNonce();
+
+      final Uri deepLink = Uri.https('phantom.app', '/ul/v1/signAndSendTransaction', {
+        'phantom_encryption_public_key': nonce,
+        'redirect_link': _redirect,
+        'payload': serializedMessage,
+        'cluster': _cluster,
+        'app_url': _dappUrl,
+      });
+
+      print('Launching Phantom with link: $deepLink');
+      if (!await launchUrl(deepLink, mode: LaunchMode.externalApplication)) {
+        throw Exception("Could not launch Phantom");
+      }
+
+      appLink.uriLinkStream.listen((Uri? uri) {
+        if (uri != null && uri.scheme == "test5wallet") {
+          final txSignature = uri.queryParameters["signature"];
+          if (txSignature != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("✅ Transaction Success: $txSignature")),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("❌ Transaction failed or canceled")),
+            );
+          }
+        }
+      });
+    } catch (e) {
+      print("Error launching Phantom transaction: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Error: $e")),
+      );
+    }
+  }
+
+  static Future<String> _getLatestBlockhash() async {
+    final rpcClient = RpcClient("https://api.devnet.solana.com");
+    final hash = await rpcClient.getLatestBlockhash();
+    return hash.value.blockhash;
   }
 }
