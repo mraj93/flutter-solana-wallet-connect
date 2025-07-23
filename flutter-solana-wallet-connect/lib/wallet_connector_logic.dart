@@ -282,8 +282,8 @@ class SolflareConnector {
   final String dappUrl = 'https://example.com';
   final String cluster = 'devnet';
 
-  late final SimpleKeyPair _dappKeyPair;
-  late final String _dappPub58;
+  late SimpleKeyPair _dappKeyPair;
+  late String _dappPub58;
 
   Future<String> _createKey() async {
     final kp = await X25519().newKeyPair();
