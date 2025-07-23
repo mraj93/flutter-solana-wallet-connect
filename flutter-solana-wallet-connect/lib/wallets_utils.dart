@@ -1,30 +1,26 @@
 // wallets_utils.dart
-
 // ignore_for_file: avoid_print
 
 import 'package:flutter/material.dart';
 
-// 🔧 Custom logic function inside utility file
-Future<void> showHelperAlert(BuildContext context, String title) async {
-  await showDialog(
-    context: context,
+Future<void> showHelperAlert(BuildContext ctx, String title) {
+  return showDialog(
+    context: ctx,
     builder: (_) => AlertDialog(
       title: Text(title),
-      content: Text("This is a helper dialog from utils"),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text("OK"))],
+      content: const Text('This is a helper dialog from utils'),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
     ),
   );
 }
 
-void helloWallet() {
-  print("✅ Hello from utility logic");
-}
+void helloWallet() => print('✅ Hello from utility logic');
 
 class WalletUtilityButtons extends StatelessWidget {
-  final Future<void> Function() onFirstPressed;
-  final Future<void> Function() onSecondPressed;
+  const WalletUtilityButtons({super.key, required this.onConnect, required this.onSend});
 
-  const WalletUtilityButtons({super.key, required this.onFirstPressed, required this.onSecondPressed});
+  final Future<void> Function() onConnect;
+  final Future<void> Function() onSend;
 
   @override
   Widget build(BuildContext context) {
@@ -32,22 +28,22 @@ class WalletUtilityButtons extends StatelessWidget {
       children: [
         ElevatedButton(
           onPressed: () async {
-            print("🔥 Connect Button Pressed");
-            helloWallet(); // ✅ Extra logic
-            await showHelperAlert(context, "Connecting..."); // ✅ Show dialog
-            await onFirstPressed(); // ✅ Call original function
+            print('🔥 Connect');
+            helloWallet();
+            await showHelperAlert(context, 'Connecting…');
+            await onConnect();
           },
-          child: Text("🔗 Connect Wallet"),
+          child: const Text('🔗 Connect Wallet'),
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         ElevatedButton(
           onPressed: () async {
-            print("🔥 Send Button Pressed");
+            print('🔥 Send');
             helloWallet();
-            await showHelperAlert(context, "Sending...");
-            await onSecondPressed();
+            await showHelperAlert(context, 'Sending…');
+            await onSend();
           },
-          child: Text("📤 Send 0.001 SOL"),
+          child: const Text('📤 Send 0.001 SOL'),
         ),
       ],
     );

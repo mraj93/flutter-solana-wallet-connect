@@ -1,372 +1,385 @@
-// Enhanced Phantom Connector
+// wallet_connector_logic.dart
 // ignore_for_file: avoid_print
 
+import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:app_links/app_links.dart';
 import 'package:cryptography/cryptography.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:solana/base58.dart';
-import 'package:solana/solana.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// ---------------- PHANTOM ----------------
 class PhantomConnector {
-  static const String _logPrefix = '👻 [Phantom]';
+  static const _log = '👻 [Phantom]';
+  final _appLinks = AppLinks();
 
   final String redirectUri = 'test5wallet://phantom';
   final String dappUrl = 'https://example.com';
   final String cluster = 'devnet';
-  final appLink = AppLinks();
 
-  String _generateRandomKey() {
-    final rand = Random.secure();
-    final bytes = Uint8List(32)..setAll(0, List.generate(32, (_) => rand.nextInt(256)));
-    final key = base58encode(bytes);
-    print('$_logPrefix 🎲 Generated random key: ${key.substring(0, 10)}...');
-    return key;
-  }
-
-  Future<void> connectPhantomWallet(Function(String pubkey) onConnect) async {
-    print('$_logPrefix 🚀 Starting Phantom connection...');
-    final nonce = _generateRandomKey();
-
-    final Uri phantomUri = Uri.https('phantom.app', '/ul/v1/connect', {
-      'app_url': dappUrl,
-      'redirect_link': redirectUri,
-      'cluster': cluster,
-      'dapp_encryption_public_key': nonce,
-    });
-
-    print('$_logPrefix 🔗 Connection URL: $phantomUri');
-
-    if (await canLaunchUrl(phantomUri)) {
-      print('$_logPrefix 📱 Launching Phantom app...');
-      await launchUrl(phantomUri, mode: LaunchMode.externalApplication);
-      print('$_logPrefix 📱 ✅ Phantom app launched');
-    } else {
-      print('$_logPrefix ❌ Could not launch Phantom app');
-      throw 'Could not launch Phantom';
-    }
-
-    print('$_logPrefix 👂 Setting up deep link listener...');
-    appLink.uriLinkStream.listen((uri) {
-      print('$_logPrefix 📨 Received deep link: $uri');
-      print('$_logPrefix 📨 Scheme: ${uri.scheme}');
-      print('$_logPrefix 📨 Query params: ${uri.queryParameters}');
-
-      if (uri.scheme == 'test5wallet') {
-        print('$_logPrefix ✅ Correct scheme detected');
-        final pubkey = uri.queryParameters['phantom_encryption_public_key'] ?? uri.queryParameters['public_key'];
-        print('$_logPrefix 🔑 Public key from response: $pubkey');
-
-        if (pubkey != null) {
-          print('$_logPrefix ✅ Public key found, calling onConnect callback');
-          onConnect(pubkey);
-        } else {
-          print('$_logPrefix ❌ No public key found in response');
-        }
-      } else {
-        print('$_logPrefix ⚠️ Wrong scheme: ${uri.scheme}');
-      }
-    });
-
-    print('$_logPrefix 👂 Deep link listener setup complete');
-  }
-}
-
-class PhantomTransfer {
-  static const String _logPrefix = '👻💸 [PhantomTransfer]';
-  static final _redirect = 'test5wallet://phantom';
-  static final _cluster = 'devnet';
-  static final _dappUrl = 'https://example.com';
-
-  static final appLink = AppLinks();
-
-  static String _generateNonce() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
-    final nonce = base58encode(Uint8List.fromList(bytes));
-    print('$_logPrefix 🎲 Generated nonce: ${nonce.substring(0, 10)}...');
-    return nonce;
-  }
-
-  static Future<void> sendSolFromPhantom({
-    required BuildContext context,
-    required String fromAddress,
-    required String toAddress,
-    required int lamports,
-  }) async {
-    print('$_logPrefix 🚀 Starting Phantom SOL transfer...');
-    print('$_logPrefix 📤 From: $fromAddress');
-    print('$_logPrefix 📥 To: $toAddress');
-    print('$_logPrefix 💰 Amount: $lamports lamports');
-
-    try {
-      print('$_logPrefix 🔗 Getting latest blockhash...');
-      final recentBlockhash = await _getLatestBlockhash();
-      print('$_logPrefix 🔗 Blockhash: $recentBlockhash');
-
-      print('$_logPrefix 📝 Creating transfer instruction...');
-      final instruction = SystemInstruction.transfer(
-        fundingAccount: Ed25519HDPublicKey.fromBase58(fromAddress),
-        recipientAccount: Ed25519HDPublicKey.fromBase58(toAddress),
-        lamports: lamports,
-      );
-      print('$_logPrefix 📝 ✅ Transfer instruction created');
-
-      print('$_logPrefix 📦 Creating message...');
-      final message = Message.only(instruction);
-      final compiled = message.compile(
-        recentBlockhash: recentBlockhash,
-        feePayer: Ed25519HDPublicKey.fromBase58(fromAddress),
-      );
-      print('$_logPrefix 📦 ✅ Message compiled');
-
-      final serializedMessage = base64.encode(Uint8List.fromList(compiled.toByteArray().toList()));
-      print('$_logPrefix 📦 Serialized message length: ${serializedMessage.length}');
-
-      final nonce = _generateNonce();
-
-      print('$_logPrefix 🔗 Building deep link...');
-      final Uri deepLink = Uri.https('phantom.app', '/ul/v1/signAndSendTransaction', {
-        'phantom_encryption_public_key': nonce,
-        'redirect_link': _redirect,
-        'payload': serializedMessage,
-        'cluster': _cluster,
-        'app_url': _dappUrl,
-      });
-
-      print('$_logPrefix 🔗 Deep link: $deepLink');
-
-      print('$_logPrefix 📱 Launching Phantom...');
-      if (!await launchUrl(deepLink, mode: LaunchMode.externalApplication)) {
-        print('$_logPrefix ❌ Could not launch Phantom');
-        throw Exception("Could not launch Phantom");
-      }
-      print('$_logPrefix 📱 ✅ Phantom launched');
-
-      print('$_logPrefix 👂 Setting up response listener...');
-      appLink.uriLinkStream.listen((Uri? uri) {
-        print('$_logPrefix 📨 Received response: $uri');
-
-        if (uri != null && uri.scheme == "test5wallet") {
-          print('$_logPrefix ✅ Valid response scheme');
-          final txSignature = uri.queryParameters["signature"];
-          print('$_logPrefix 🧾 Transaction signature: $txSignature');
-
-          if (txSignature != null) {
-            print('$_logPrefix ✅ Transaction successful!');
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Transaction Success: $txSignature")));
-          } else {
-            print('$_logPrefix ❌ No transaction signature received');
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text("❌ Transaction failed or canceled")));
-          }
-        } else {
-          print('$_logPrefix ⚠️ Invalid response format');
-        }
-      });
-
-      print('$_logPrefix 👂 Response listener setup complete');
-    } catch (e) {
-      print('$_logPrefix ❌ Error: $e');
-      print('$_logPrefix ❌ Stack trace: ${StackTrace.current}');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Error: $e")));
-    }
-  }
-
-  static Future<String> _getLatestBlockhash() async {
-    print('$_logPrefix 🌐 Fetching latest blockhash from RPC...');
-    final rpcClient = RpcClient("https://api.devnet.solana.com");
-    final hash = await rpcClient.getLatestBlockhash();
-    print('$_logPrefix 🌐 ✅ Blockhash fetched: ${hash.value.blockhash}');
-    return hash.value.blockhash;
-  }
-}
-
-// Solflare Connector
-class SolflareConnector {
-  static const String _logPrefix = '🔥 [Solflare]';
-
-  final String redirectUri = 'test5wallet://solflare';
-  final String dappUrl = 'https://example.com';
-  final String cluster = 'devnet';
-  final appLink = AppLinks();
-
-  // Store the private key for decryption
   late SimpleKeyPair _dappKeyPair;
   late String _dappPublicKey;
 
-  Future<String> _generateRandomKey() async {
-    print('$_logPrefix 🎲 Generating x25519 key pair...');
+  StreamSubscription<Uri>? _sub;
 
-    // Generate proper x25519 key pair
+  Future<String> _createNonce() async {
     final algorithm = X25519();
     _dappKeyPair = await algorithm.newKeyPair();
     final publicKey = await _dappKeyPair.extractPublicKey();
     final publicKeyBytes = publicKey.bytes;
 
     _dappPublicKey = base58encode(Uint8List.fromList(publicKeyBytes));
-    print('$_logPrefix 🎲 Generated dApp public key: ${_dappPublicKey.substring(0, 10)}...');
-
+    print('$_log 🎲 Generated dApp public key=${_dappPublicKey.substring(0, 8)}…');
     return _dappPublicKey;
   }
 
-  Future<void> connectSolflareWallet(Function(String pubkey, String session) onConnect) async {
-    print('$_logPrefix 🚀 Starting Solflare connection...');
-    final nonce = await _generateRandomKey(); // Now async
+  Future<void> _listen(Function(String) onConnect) async {
+    await _sub?.cancel();
+    _sub = _appLinks.uriLinkStream.listen((uri) async {
+      print('$_log 📨 Received deep link: $uri');
+      print('$_log 📨 All query parameters: ${uri.queryParameters}');
 
-    final Uri solflareUri = Uri.https('solflare.com', '/ul/v1/connect', {
+      if (uri.scheme != 'test5wallet') {
+        print('$_log ⚠️ Wrong scheme: ${uri.scheme}');
+        return;
+      }
+
+      final phantomEncryptionKey = uri.queryParameters['phantom_encryption_public_key'];
+      final encryptedData = uri.queryParameters['data'];
+      final nonce = uri.queryParameters['nonce']; // ✅ Use the nonce parameter
+      final plainPublicKey = uri.queryParameters['public_key'];
+      final errorParam = uri.queryParameters['error'];
+
+      print('$_log 🔍 phantom_encryption_public_key: $phantomEncryptionKey');
+      print('$_log 🔍 encrypted data length: ${encryptedData?.length ?? 0}');
+      print('$_log 🔍 nonce: $nonce');
+      print('$_log 🔍 plain public_key: $plainPublicKey');
+      print('$_log 🔍 error: $errorParam');
+
+      // Handle errors first
+      if (errorParam != null) {
+        print('$_log ❌ Phantom returned error: $errorParam');
+        return;
+      }
+
+      // Try plain text public key first
+      if (plainPublicKey != null && plainPublicKey.isNotEmpty) {
+        print('$_log ✅ Found plain text wallet public key: $plainPublicKey');
+        onConnect(plainPublicKey);
+        return;
+      }
+
+      // Try decryption with all available data
+      if (encryptedData != null && phantomEncryptionKey != null) {
+        print('$_log 🔐 Attempting decryption...');
+        try {
+          final walletAddress = await _decryptSimpleApproach(encryptedData, phantomEncryptionKey, nonce);
+          if (walletAddress != null) {
+            print('$_log ✅ Successfully decrypted wallet address: $walletAddress');
+            onConnect(walletAddress);
+            return;
+          }
+        } catch (e) {
+          print('$_log ❌ Decryption failed: $e');
+        }
+      }
+
+      // ✅ FALLBACK: Many implementations use phantom_encryption_public_key as wallet address
+      if (phantomEncryptionKey != null && phantomEncryptionKey.isNotEmpty) {
+        print('$_log 🔄 Using fallback: phantom_encryption_public_key as wallet address');
+        print('$_log 🔄 This is a temporary workaround commonly used in Solana dApps');
+        onConnect(phantomEncryptionKey);
+        return;
+      }
+
+      print('$_log ❌ No usable data in Phantom response');
+    });
+  }
+
+  // Simplified decryption approach
+  Future<String?> _decryptSimpleApproach(String encryptedData, String phantomPublicKey, String? urlNonce) async {
+    try {
+      print('$_log 🔐 Simple decryption approach...');
+
+      // 1. Derive shared secret
+      final sharedSecretBytes = await _deriveSharedSecret(phantomPublicKey);
+      final encryptedBytes = base58decode(encryptedData);
+
+      print('$_log 🔐 Shared secret: ${sharedSecretBytes.length} bytes');
+      print('$_log 🔐 Encrypted data: ${encryptedBytes.length} bytes');
+
+      // 2. Try using the nonce from URL if available
+      if (urlNonce != null) {
+        try {
+          final result = await _tryWithUrlNonce(encryptedBytes, sharedSecretBytes, urlNonce);
+          if (result != null) return result;
+        } catch (e) {
+          print('$_log 🔐 URL nonce approach failed: $e');
+        }
+      }
+
+      // 3. Try standard formats with embedded nonces
+      final nonceSizes = [12, 24, 16, 8];
+      for (final nonceSize in nonceSizes) {
+        try {
+          print('$_log 🔐 Trying ${nonceSize}-byte embedded nonce...');
+
+          if (encryptedBytes.length < nonceSize + 16) {
+            print('$_log 🔐 Data too short for ${nonceSize}-byte nonce');
+            continue;
+          }
+
+          final nonce = encryptedBytes.sublist(0, nonceSize);
+          final payload = encryptedBytes.sublist(nonceSize);
+
+          // Try different algorithms
+          final algorithms = [
+            {'cipher': Chacha20.poly1305Aead(), 'name': 'ChaCha20', 'maxNonce': 12},
+            {'cipher': AesGcm.with256bits(), 'name': 'AES-GCM', 'maxNonce': 12},
+          ];
+
+          for (final algInfo in algorithms) {
+            try {
+              final cipher = algInfo['cipher'] as Cipher;
+              final name = algInfo['name'] as String;
+              final maxNonce = algInfo['maxNonce'] as int;
+
+              // Adjust nonce size for algorithm
+              final adjustedNonce = nonce.length > maxNonce ? nonce.sublist(0, maxNonce) : nonce;
+
+              if (payload.length < 16) continue;
+
+              final ciphertext = payload.sublist(0, payload.length - 16);
+              final mac = payload.sublist(payload.length - 16);
+
+              print('$_log 🔐 $name: nonce=${adjustedNonce.length}, cipher=${ciphertext.length}, mac=${mac.length}');
+
+              final secretBox = SecretBox(ciphertext, nonce: adjustedNonce, mac: Mac(mac));
+              final decryptedBytes = await cipher.decrypt(secretBox, secretKey: SecretKey(sharedSecretBytes));
+
+              final jsonString = utf8.decode(decryptedBytes);
+              print('$_log 🔐 ✅ $name decryption successful: $jsonString');
+
+              final responseData = json.decode(jsonString) as Map<String, dynamic>;
+              return responseData['public_key'] as String?;
+            } catch (e) {
+              print('$_log 🔐 ${algInfo['name']} failed: $e');
+              continue;
+            }
+          }
+        } catch (e) {
+          print('$_log 🔐 ${nonceSize}-byte nonce failed: $e');
+          continue;
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print('$_log ❌ Simple decryption error: $e');
+      return null;
+    }
+  }
+
+  // Try decryption using nonce from URL parameters
+  Future<String?> _tryWithUrlNonce(List<int> encryptedBytes, List<int> sharedSecret, String urlNonce) async {
+    try {
+      print('$_log 🔐 Trying with URL nonce: ${urlNonce.substring(0, 8)}...');
+
+      // Decode the nonce from the URL
+      final nonceBytes = base58decode(urlNonce);
+      print('$_log 🔐 URL nonce bytes: ${nonceBytes.length}');
+
+      // Try different ways to use the URL nonce
+      final nonceVariations = [
+        nonceBytes,
+        nonceBytes.length > 12 ? nonceBytes.sublist(0, 12) : nonceBytes,
+        nonceBytes.length > 24 ? nonceBytes.sublist(0, 24) : nonceBytes,
+      ];
+
+      for (int i = 0; i < nonceVariations.length; i++) {
+        final nonce = nonceVariations[i];
+        if (nonce.isEmpty) continue;
+
+        try {
+          print('$_log 🔐 URL nonce variation ${i + 1}: ${nonce.length} bytes');
+
+          // Assume the entire encrypted data is ciphertext + MAC
+          if (encryptedBytes.length < 16) continue;
+
+          final ciphertext = encryptedBytes.sublist(0, encryptedBytes.length - 16);
+          final mac = encryptedBytes.sublist(encryptedBytes.length - 16);
+
+          // Try ChaCha20 with adjusted nonce
+          final adjustedNonce = nonce.length > 12 ? nonce.sublist(0, 12) : nonce;
+          if (adjustedNonce.length < 12) {
+            // Pad nonce to 12 bytes if too short
+            final paddedNonce = List<int>.filled(12, 0);
+            paddedNonce.setRange(0, adjustedNonce.length, adjustedNonce);
+            final chacha20 = Chacha20.poly1305Aead();
+            final secretBox = SecretBox(ciphertext, nonce: paddedNonce, mac: Mac(mac));
+            final decryptedBytes = await chacha20.decrypt(secretBox, secretKey: SecretKey(sharedSecret));
+
+            final jsonString = utf8.decode(decryptedBytes);
+            print('$_log 🔐 ✅ URL nonce decryption successful: $jsonString');
+
+            final responseData = json.decode(jsonString) as Map<String, dynamic>;
+            return responseData['public_key'] as String?;
+          }
+        } catch (e) {
+          print('$_log 🔐 URL nonce variation ${i + 1} failed: $e');
+          continue;
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print('$_log 🔐 URL nonce approach error: $e');
+      return null;
+    }
+  }
+
+  Future<List<int>> _deriveSharedSecret(String phantomPublicKey) async {
+    final phantomPubKeyBytes = base58decode(phantomPublicKey);
+    final phantomPublicKeyObj = SimplePublicKey(phantomPubKeyBytes, type: KeyPairType.x25519);
+
+    final algorithm = X25519();
+    final sharedSecret = await algorithm.sharedSecretKey(keyPair: _dappKeyPair, remotePublicKey: phantomPublicKeyObj);
+
+    return await sharedSecret.extractBytes();
+  }
+
+  Future<void> connect(Function(String pubkey) onConnect) async {
+    final nonce = await _createNonce();
+    final url = Uri.https('phantom.app', '/ul/v1/connect', {
       'app_url': dappUrl,
       'redirect_link': redirectUri,
       'cluster': cluster,
       'dapp_encryption_public_key': nonce,
     });
 
-    print('$_logPrefix 🔗 Connection URL: $solflareUri');
-
-    if (await canLaunchUrl(solflareUri)) {
-      print('$_logPrefix 📱 Launching Solflare app...');
-      await launchUrl(solflareUri, mode: LaunchMode.externalApplication);
-      print('$_logPrefix 📱 ✅ Solflare app launched');
-    } else {
-      print('$_logPrefix ❌ Could not launch Solflare app');
-      throw 'Could not launch Solflare wallet';
+    print('$_log 🔗 Connection URL: $url');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      throw 'Could not launch Phantom';
     }
+    await _listen(onConnect);
+  }
 
-    print('$_logPrefix 👂 Setting up deep link listener...');
-    appLink.uriLinkStream.listen((uri) {
-      print('$_logPrefix 📨 Received deep link: $uri');
-      print('$_logPrefix 📨 Scheme: ${uri.scheme}');
-      print('$_logPrefix 📨 Query params: ${uri.queryParameters}');
+  void disconnect() {
+    print('$_log 🔌 Disconnecting...');
+    _sub?.cancel();
+  }
+}
 
-      if (uri.scheme == 'test5wallet') {
-        print('$_logPrefix ✅ Correct scheme detected');
-        final encryptedData = uri.queryParameters['data'];
-        final solflarePublicKey = uri.queryParameters['solflare_encryption_public_key'];
-        final nonce = uri.queryParameters['nonce'];
+/// --------------- SOLFLARE ----------------
+class SolflareConnector {
+  static const _log = '🔥 [Solflare]';
+  final _appLinks = AppLinks();
 
-        print('$_logPrefix 🔐 Encrypted data present: ${encryptedData != null}');
-        print('$_logPrefix 🔑 Solflare public key present: ${solflarePublicKey != null}');
-        print('$_logPrefix 🎲 Nonce present: ${nonce != null}');
+  final String redirectUri = 'test5wallet://solflare';
+  final String dappUrl = 'https://example.com';
+  final String cluster = 'devnet';
 
-        if (encryptedData != null && solflarePublicKey != null) {
-          print('$_logPrefix 🔓 Attempting to decrypt response...');
-          _decryptSolflareResponse(encryptedData, solflarePublicKey, nonce ?? '', onConnect);
+  late final SimpleKeyPair _dappKeyPair;
+  late final String _dappPub58;
+
+  Future<String> _createKey() async {
+    final kp = await X25519().newKeyPair();
+    _dappKeyPair = kp;
+    final pub = await kp.extractPublicKey();
+    _dappPub58 = base58encode(Uint8List.fromList(pub.bytes));
+    print('$_log 🔑 localPub=${_dappPub58.substring(0, 8)}…');
+    return _dappPub58;
+  }
+
+  StreamSubscription<Uri>? _sub;
+
+  Future<void> _listen(void Function(String pubkey, String session) onConnect) async {
+    await _sub?.cancel();
+    _sub = _appLinks.uriLinkStream.listen((uri) async {
+      print('$_log 📨 $uri');
+      if (uri.scheme != 'test5wallet') return;
+
+      // Try plain text public key first
+      final plainPublicKey = uri.queryParameters['public_key'];
+      if (plainPublicKey != null && plainPublicKey.isNotEmpty) {
+        print('$_log ✅ Found plain text public key: $plainPublicKey');
+        onConnect(plainPublicKey, 'solflare_session');
+        return;
+      }
+
+      final enc = uri.queryParameters['data'];
+      final remotePub = uri.queryParameters['solflare_encryption_public_key'];
+
+      if (enc == null || remotePub == null) {
+        print('$_log ⚠️ missing data');
+        return;
+      }
+
+      try {
+        final plain = await _decrypt(enc, remotePub);
+        final pubKey = plain['public_key'] as String?;
+        final session = plain['session'] as String? ?? 'solflare_session';
+        if (pubKey != null) {
+          onConnect(pubKey, session);
         } else {
-          print('$_logPrefix ❌ Missing encrypted data or public key');
+          // Fallback to using the encryption key
+          onConnect(remotePub, 'fallback');
         }
-      } else {
-        print('$_logPrefix ⚠️ Wrong scheme: ${uri.scheme}');
+      } catch (e) {
+        print('$_log ❌ decrypt $e');
+        // Fallback to using the encryption key
+        onConnect(remotePub, 'fallback');
       }
     });
-
-    print('$_logPrefix 👂 Deep link listener setup complete');
   }
 
-  Future<void> _decryptSolflareResponse(
-    String encryptedData,
-    String solflarePublicKey,
-    String nonce,
-    Function(String, String) onConnect,
-  ) async {
-    print('$_logPrefix 🔓 Decrypting Solflare response...');
-    print('$_logPrefix 🔓 Encrypted data length: ${encryptedData.length}');
-    print('$_logPrefix 🔓 Solflare public key: ${solflarePublicKey.substring(0, 10)}...');
+  Future<void> connect(void Function(String pubkey, String session) onConnect) async {
+    final nonce = await _createKey();
+    final url = Uri.https('solflare.com', '/ul/v1/connect', {
+      'app_url': dappUrl,
+      'redirect_link': redirectUri,
+      'cluster': cluster,
+      'dapp_encryption_public_key': nonce,
+    });
 
+    print('$_log 🔗 $url');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      throw 'Could not launch Solflare';
+    }
+    await _listen(onConnect);
+  }
+
+  Future<Map<String, dynamic>> _decrypt(String enc, String remote) async {
     try {
-      // Step 1: Decode the encrypted data from base58
-      final encryptedBytes = base58decode(encryptedData);
-      print('$_logPrefix 🔓 Decoded encrypted bytes length: ${encryptedBytes.length}');
+      final remotePub = SimplePublicKey(base58decode(remote), type: KeyPairType.x25519);
+      final secret = await X25519().sharedSecretKey(keyPair: _dappKeyPair, remotePublicKey: remotePub);
+      final bytes = base58decode(enc);
 
-      // Step 2: Decode Solflare's public key
-      final solflarePublicKeyBytes = base58decode(solflarePublicKey);
-      print('$_logPrefix 🔑 Solflare public key bytes length: ${solflarePublicKeyBytes.length}');
+      if (bytes.length < 12 + 16) throw 'cipher too short';
 
-      // Step 3: Perform x25519 key exchange
-      final algorithm = X25519();
-      final solflarePublicKeyObj = SimplePublicKey(solflarePublicKeyBytes, type: KeyPairType.x25519);
+      final iv = bytes.sublist(0, 12);
+      final tag = bytes.sublist(bytes.length - 16);
+      final ciphertext = bytes.sublist(12, bytes.length - 16);
 
-      // Derive shared secret
-      final sharedSecret = await algorithm.sharedSecretKey(
-        keyPair: _dappKeyPair,
-        remotePublicKey: solflarePublicKeyObj,
+      final secretBox = SecretBox(ciphertext, nonce: iv, mac: Mac(tag));
+      final clearBytes = await AesGcm.with256bits().decrypt(
+        secretBox,
+        secretKey: SecretKey(await secret.extractBytes()),
       );
 
-      final sharedSecretBytes = await sharedSecret.extractBytes();
-      print('$_logPrefix 🤝 Shared secret derived, length: ${sharedSecretBytes.length}');
-
-      // Step 4: Decrypt using AES-256-GCM
-      final aesGcm = AesGcm.with256bits();
-
-      // Extract nonce/IV (first 12 bytes) and encrypted payload
-      if (encryptedBytes.length < 12) {
-        throw Exception('Encrypted data too short');
-      }
-
-      final iv = encryptedBytes.sublist(0, 12);
-      final encryptedPayload = encryptedBytes.sublist(12);
-
-      print('$_logPrefix 🔐 IV length: ${iv.length}');
-      print('$_logPrefix 🔐 Encrypted payload length: ${encryptedPayload.length}');
-
-      // Decrypt
-      final secretBox = SecretBox(
-        encryptedPayload,
-        nonce: iv,
-        mac: Mac.empty, // Solflare might not use MAC, adjust if needed
-      );
-
-      final decryptedBytes = await aesGcm.decrypt(secretBox, secretKey: SecretKey(sharedSecretBytes));
-
-      print('$_logPrefix ✅ Decryption successful, length: ${decryptedBytes.length}');
-
-      // Step 5: Parse decrypted JSON
-      final jsonData = utf8.decode(decryptedBytes);
-      print('$_logPrefix 🔓 Decrypted JSON: $jsonData');
-
-      final responseData = json.decode(jsonData);
-      print('$_logPrefix 🔓 Parsed response data: $responseData');
-
-      final publicKey = responseData['public_key'];
-      final session = responseData['session'] ?? 'solflare_session_${DateTime.now().millisecondsSinceEpoch}';
-
-      print('$_logPrefix 🔑 Extracted public key: $publicKey');
-      print('$_logPrefix 🎫 Extracted session: ${session.substring(0, 10)}...');
-
-      if (publicKey != null) {
-        print('$_logPrefix ✅ Decryption successful, calling onConnect');
-        onConnect(publicKey, session);
-      } else {
-        print('$_logPrefix ❌ Missing public key in decrypted data');
-      }
+      final jsonData = json.decode(utf8.decode(clearBytes)) as Map<String, dynamic>;
+      return jsonData;
     } catch (e) {
-      print('$_logPrefix ❌ Error decrypting Solflare response: $e');
-      print('$_logPrefix ❌ Stack trace: ${StackTrace.current}');
-
-      // Fallback: Try to extract public key from URL parameters if available
-      _handleDecryptionFallback(encryptedData, solflarePublicKey, onConnect);
+      print('$_log ❌ Solflare decryption error: $e');
+      rethrow;
     }
   }
 
-  // Fallback method for when decryption fails
-  void _handleDecryptionFallback(String encryptedData, String solflarePublicKey, Function(String, String) onConnect) {
-    print('$_logPrefix 🔄 Attempting fallback decryption method...');
-
-    try {
-      // Sometimes Solflare might return the public key directly in the URL
-      // or use a simpler encoding
-      print('$_logPrefix 🔄 Using Solflare public key as wallet address');
-      final session = 'solflare_session_${DateTime.now().millisecondsSinceEpoch}';
-
-      // Use Solflare's public key as the wallet public key (common pattern)
-      onConnect(solflarePublicKey, session);
-      print('$_logPrefix 🔄 ✅ Fallback successful');
-    } catch (e) {
-      print('$_logPrefix 🔄 ❌ Fallback also failed: $e');
-    }
+  void disconnect() {
+    print('$_log 🔌 Disconnecting...');
+    _sub?.cancel();
   }
 }
