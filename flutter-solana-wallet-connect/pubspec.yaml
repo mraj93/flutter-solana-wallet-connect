@@ -14,8 +14,7 @@ dependencies:
   # Solana & Crypto
   solana: ^0.31.2+1
   solana_mobile_client: ^0.1.2
-  cryptography: ^2.7.0
-  pinenacl: ^0.6.0  # ✅ Added: NaCl for Phantom decryption
+  sodium: ^3.4.4
 
   # UI & Navigation
   app_links: ^6.4.0
@@ -23,6 +22,7 @@ dependencies:
 
   # Utilities
   meta: ^1.16.0
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
