@@ -23,6 +23,7 @@ dependencies:
   # Utilities
   meta: ^1.16.0
   shared_preferences: ^2.5.3
+  logger: ^2.6.1
 
 dev_dependencies:
   flutter_test:
