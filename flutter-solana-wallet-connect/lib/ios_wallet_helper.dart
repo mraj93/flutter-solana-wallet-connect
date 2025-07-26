@@ -125,10 +125,10 @@ class PhantomConnector {
       final nonceSizes = [12, 24, 16, 8];
       for (final nonceSize in nonceSizes) {
         try {
-          print('$_log 🔐 Trying ${nonceSize}-byte embedded nonce...');
+          print('$_log 🔐 Trying $nonceSize-byte embedded nonce...');
 
           if (encryptedBytes.length < nonceSize + 16) {
-            print('$_log 🔐 Data too short for ${nonceSize}-byte nonce');
+            print('$_log 🔐 Data too short for $nonceSize-byte nonce');
             continue;
           }
 
@@ -171,7 +171,7 @@ class PhantomConnector {
             }
           }
         } catch (e) {
-          print('$_log 🔐 ${nonceSize}-byte nonce failed: $e');
+          print('$_log 🔐 $nonceSize-byte nonce failed: $e');
           continue;
         }
       }

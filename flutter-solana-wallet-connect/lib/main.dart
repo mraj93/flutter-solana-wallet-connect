@@ -1,17 +1,14 @@
 // ignore_for_file: avoid_print
 
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:solana/base58.dart';
-import 'package:solana/encoder.dart';
 import 'package:solana/solana.dart';
-import 'package:solana_mobile_client/solana_mobile_client.dart';
+
+import 'android_wallet_helper.dart';
 import 'unified_wallet_connector.dart';
 import 'wallet_model.dart';
-import 'android_wallet_helper.dart';
 
 void main() => runApp(const MyApp());
 
@@ -22,10 +19,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Solana Wallet Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple), useMaterial3: true),
       home: const ConnectWalletScreen(),
     );
   }
@@ -44,7 +38,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
   // Controllers for input fields
   final TextEditingController _solAmountController = TextEditingController(text: '0.01');
   final TextEditingController _receiverController = TextEditingController(
-      text: '9dDzzj6ztgnmcqM25yD4odBsqq7JVvwMNStfp6rrQ9VJ'
+    text: '9dDzzj6ztgnmcqM25yD4odBsqq7JVvwMNStfp6rrQ9VJ',
   );
   final TextEditingController _messageController = TextEditingController(text: 'Hello Solana!');
   final TextEditingController _tokenMintController = TextEditingController();
@@ -69,10 +63,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     _walletManager = UnifiedWalletManager(solanaClient: client);
     print('$_logPrefix 🔗 Wallet manager initialized');
 
-    _androidHelper = AndroidWalletHelper(
-      client: client,
-      walletManager: _walletManager,
-    );
+    _androidHelper = AndroidWalletHelper(client: client, walletManager: _walletManager);
     print('$_logPrefix 🤖 Android helper initialized');
 
     // Start periodic connection validation
@@ -112,21 +103,18 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
       await _androidHelper.connectWallet();
       print('$_logPrefix 🤖 ✅ Android connection successful');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Wallet connected successfully!")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Wallet connected successfully!")));
       }
     } catch (e) {
       print('$_logPrefix 🤖 ❌ Android wallet connection error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Connection failed: $e")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Connection failed: $e")));
       }
     }
   }
 
   void _showWalletSelectionDialog() {
+    final snakeBar = ScaffoldMessenger.of(context);
     print('$_logPrefix 🔄 Showing wallet selection dialog...');
     showDialog(
       context: context,
@@ -146,9 +134,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                     await _walletManager.connectWallet(WalletType.phantom);
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Failed to connect to Phantom: $e")),
-                      );
+                      snakeBar.showSnackBar(SnackBar(content: Text("Failed to connect to Phantom: $e")));
                     }
                   }
                 },
@@ -163,9 +149,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                     await _walletManager.connectWallet(WalletType.solflare);
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Failed to connect to Solflare: $e")),
-                      );
+                      snakeBar.showSnackBar(SnackBar(content: Text("Failed to connect to Solflare: $e")));
                     }
                   }
                 },
@@ -184,33 +168,26 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     final receiver = _receiverController.text.trim();
 
     if (receiver.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter receiver address")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter receiver address")));
       return;
     }
 
     try {
       String signature;
       if (Platform.isAndroid) {
-        signature = await _androidHelper.sendSolTransaction(
-          amount: amount,
-          receiverAddress: receiver,
-        );
+        signature = await _androidHelper.sendSolTransaction(amount: amount, receiverAddress: receiver);
       } else {
         throw Exception("iOS transactions not yet implemented");
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("✅ SOL sent! Signature: ${signature.substring(0, 8)}...")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("✅ SOL sent! Signature: ${signature.substring(0, 8)}...")));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Failed to send SOL: $e")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Failed to send SOL: $e")));
       }
     }
   }
@@ -221,9 +198,9 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     final receiver = _receiverController.text.trim();
 
     if (tokenMint.isEmpty || receiver.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in all token transfer fields")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please fill in all token transfer fields")));
       return;
     }
 
@@ -241,15 +218,13 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("✅ SPL Token sent! Signature: ${signature.substring(0, 8)}...")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("✅ SPL Token sent! Signature: ${signature.substring(0, 8)}...")));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Failed to send SPL token: $e")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Failed to send SPL token: $e")));
       }
     }
   }
@@ -258,9 +233,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     final message = _messageController.text.trim();
 
     if (message.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a message to sign")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a message to sign")));
       return;
     }
 
@@ -285,10 +258,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                 Text(message),
                 const SizedBox(height: 16),
                 const Text('Signature:', style: TextStyle(fontWeight: FontWeight.bold)),
-                SelectableText(
-                  signature,
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                ),
+                SelectableText(signature, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
               ],
             ),
             actions: [
@@ -296,25 +266,20 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: signature));
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Signature copied to clipboard")),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text("Signature copied to clipboard")));
                 },
                 child: const Text('Copy'),
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
             ],
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Failed to sign message: $e")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Failed to sign message: $e")));
       }
     }
   }
@@ -323,9 +288,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
     try {
       final walletState = _walletManager.stateNotifier.value;
       if (!walletState.isConnected || walletState.publicKey == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Wallet not connected")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Wallet not connected")));
         return;
       }
 
@@ -336,15 +299,13 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("✅ Airdrop requested! Signature: ${signature.substring(0, 8)}...")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("✅ Airdrop requested! Signature: ${signature.substring(0, 8)}...")));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Airdrop failed: $e")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Airdrop failed: $e")));
       }
     }
   }
@@ -359,18 +320,17 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: info.entries.map((entry) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text('${entry.key}: ${entry.value}'),
-            )).toList(),
+            children: info.entries
+                .map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text('${entry.key}: ${entry.value}'),
+                  ),
+                )
+                .toList(),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
       ),
     );
   }
@@ -382,11 +342,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
         title: const Text('Solana Wallet Demo'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: showConnectionInfo,
-            tooltip: 'Connection Info',
-          ),
+          IconButton(icon: const Icon(Icons.info_outline), onPressed: showConnectionInfo, tooltip: 'Connection Info'),
         ],
       ),
       body: Padding(
@@ -421,30 +377,25 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Wallet Connection',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Wallet Connection', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: walletState.isConnecting ? null : () {
-                if (walletState.isConnected) {
-                  _walletManager.disconnect();
-                  _androidHelper.disconnect(reason: 'User requested disconnect');
-                } else {
-                  if (Platform.isAndroid) {
-                    connectWalletAndroid();
-                  } else if (Platform.isIOS) {
-                    _showWalletSelectionDialog();
-                  }
-                }
-              },
+              onPressed: walletState.isConnecting
+                  ? null
+                  : () {
+                      if (walletState.isConnected) {
+                        _walletManager.disconnect();
+                        _androidHelper.disconnect(reason: 'User requested disconnect');
+                      } else {
+                        if (Platform.isAndroid) {
+                          connectWalletAndroid();
+                        } else if (Platform.isIOS) {
+                          _showWalletSelectionDialog();
+                        }
+                      }
+                    },
               icon: walletState.isConnecting
-                  ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : Icon(walletState.isConnected ? Icons.link_off : Icons.link),
               label: Text(
                 walletState.isConnecting
@@ -457,10 +408,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(4),
-              ),
+              decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
               child: Text(
                 'Platform: ${Platform.isAndroid ? "Android (MWA)" : "iOS (Deep Links)"}',
                 style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
@@ -501,14 +449,8 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
               Container(
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Error: ${walletState.error}',
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(4)),
+                child: Text('Error: ${walletState.error}', style: const TextStyle(color: Colors.red, fontSize: 12)),
               ),
           ],
         ),
@@ -526,10 +468,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Wallet Balances',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                const Text('Wallet Balances', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Row(
                   children: [
                     ElevatedButton.icon(
@@ -546,16 +485,10 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                     ElevatedButton.icon(
                       onPressed: walletState.isLoadingBalances ? null : _walletManager.fetchAllBalances,
                       icon: walletState.isLoadingBalances
-                          ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.refresh, size: 16),
                       label: Text(walletState.isLoadingBalances ? 'Loading...' : 'Refresh'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
+                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                     ),
                   ],
                 ),
@@ -574,10 +507,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                   Container(
                     width: 32,
                     height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade100,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(16)),
                     child: const Icon(Icons.account_balance_wallet, color: Colors.blue),
                   ),
                   const SizedBox(width: 12),
@@ -634,10 +564,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(
-              color: Colors.purple.shade100,
-              borderRadius: BorderRadius.circular(16),
-            ),
+            decoration: BoxDecoration(color: Colors.purple.shade100, borderRadius: BorderRadius.circular(16)),
             child: const Icon(Icons.token, color: Colors.purple, size: 16),
           ),
           const SizedBox(width: 12),
@@ -675,10 +602,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
             // SOL Transfer Section
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -711,10 +635,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: sendSolana,
-                        child: const Text('Send'),
-                      ),
+                      ElevatedButton(onPressed: sendSolana, child: const Text('Send')),
                     ],
                   ),
                 ],
@@ -726,10 +647,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
             // SPL Token Transfer Section
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.purple.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(8)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -758,10 +676,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: sendSplToken,
-                        child: const Text('Send Token'),
-                      ),
+                      ElevatedButton(onPressed: sendSplToken, child: const Text('Send Token')),
                     ],
                   ),
                 ],
@@ -773,10 +688,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
             // OPPI Token Transfer Section - NEW
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -792,17 +704,14 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                       if (Platform.isAndroid) {
                         await _androidHelper.sendOppiTokens(context);
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("iOS OPPI token sending not implemented")),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text("iOS OPPI token sending not implemented")));
                       }
                     },
                     icon: const Icon(Icons.token, size: 16),
                     label: const Text('Send 1 OPPI'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
                   ),
                 ],
               ),
@@ -826,10 +735,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
             // Message Signing Section
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -885,9 +791,7 @@ class _ConnectWalletScreenState extends State<ConnectWalletScreen> {
                     _tokenAmountController.text = '1.0';
                     _messageController.text = 'Hello Solana!';
                     _tokenMintController.clear();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Input fields cleared")),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Input fields cleared")));
                   },
                   icon: const Icon(Icons.clear, size: 16),
                   label: const Text('Clear Inputs'),
